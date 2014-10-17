@@ -467,7 +467,9 @@ class PrimaryKey(Column):
         if not obj._init:
             self._init_(obj, *value)
             return
-        raise InvalidOperation("Cannot update primary key value")
+        else:
+            super(PrimaryKey, self).__set__(obj, value)
+
 
 class ManyToOne(Column):
     '''

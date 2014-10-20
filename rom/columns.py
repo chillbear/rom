@@ -449,7 +449,8 @@ class Point(Column):
     def _from_redis(self, value):
         if value == 'null':
             return None
-        return Point(x=value.x, value.y)
+        point_dict = json.loads(value)
+        return Point(x=point_dict.x, y=point_dict.y)
 
 
 class PrimaryKey(Column):

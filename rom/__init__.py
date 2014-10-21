@@ -347,6 +347,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         This is the typical behavior of nulls in unique constraints inside both
         MySQL and Postgres.
     '''
+
+    KEY_PREFIX = None
+
     def __init__(self, **kwargs):
         self._new = not kwargs.pop('_loading', False)
         model = self.__class__.__name__
@@ -382,9 +385,13 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             data = dict((k.decode(), v.decode()) for k, v in data.items())
         self.__init__(_loading=True, **data)
 
+    @classmethod
+    def _key_prefix(cls):
+        return getattr(cls, 'KEY_PREFIX') or cls.__name__.lower()
+
     @property
     def _pk(self):
-        return '%s:%s'%(self.__class__.__name__, getattr(self, self._pkey))
+        return '%s:%s' % (self._key_prefix(), getattr(self, self._pkey))
 
     @classmethod
     def _apply_changes(cls, old, new, full=False, delete=False):
@@ -394,7 +401,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         if not pk:
             raise ColumnError("Missing primary key value")
 
-        model = cls.__name__
+        model = cls._key_prefix()
+
         key = '%s:%s'%(model, pk)
         pipe = conn.pipeline(True)
 

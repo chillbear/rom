@@ -10,6 +10,7 @@ from .exceptions import (ORMError, InvalidOperation, ColumnError,
     MissingColumn, InvalidColumnValue, RestrictError)
 from .util import (_numeric_keygen, _string_keygen, _many_to_one_keygen,
     _boolean_keygen, dt2ts, ts2dt, t2ts, ts2t, session, _connect)
+from django.contrib.gis.geos import Point as GeoPoint
 
 NULL = object()
 MODELS = {}
@@ -450,7 +451,8 @@ class Point(Column):
         if value == 'null':
             return None
         point_dict = json.loads(value)
-        return Point(x=point_dict.get('x'), y=point_dict.get('y'))
+        point = GeoPoint(x=point_dict.get('x'), y=point_dict.get('y'))
+        return point
 
 
 class PrimaryKey(Column):

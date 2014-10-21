@@ -450,7 +450,7 @@ class Point(Column):
         if value == 'null':
             return None
         point_dict = json.loads(value)
-        return Point(x=point_dict.x, y=point_dict.y)
+        return Point(x=point_dict.get('x'), y=point_dict.get('y'))
 
 
 class PrimaryKey(Column):

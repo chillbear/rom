@@ -352,7 +352,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
     def __init__(self, **kwargs):
         self._new = not kwargs.pop('_loading', False)
-        model = self.__class__.__name__
+        model = self._key_prefix()
         self._data = {}
         self._last = {}
         self._modified = False
@@ -632,7 +632,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         single = not isinstance(ids, (list, tuple))
         if single:
             ids = [ids]
-        pks = ['%s:%s'%(cls.__name__, id) for id in map(int, ids)]
+        pks = ['%s:%s'%(cls._key_prefix(), id) for id in map(int, ids)]
         # get from the session, if possible
         out = list(map(session.get, pks))
         # if we couldn't get an instance from the session, load from Redis
@@ -678,7 +678,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             with columns that use a numeric index.
         '''
         conn = _connect(cls)
-        model = cls.__name__
+        model = cls._key_prefix()
         # handle limits and query requirements
         _limit = kwargs.pop('_limit', ())
         if _limit and len(_limit) != 2:

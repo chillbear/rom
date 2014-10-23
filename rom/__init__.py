@@ -728,8 +728,14 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         to work
         """
         result = cls.filter_by(**kwargs)
-
-        print result
+        if result is None or len(result) == 0:
+            from django.core.exceptions import ObjectDoesNotExist
+            raise ObjectDoesNotExist('The object you are trying to get does not exist')
+        elif len(result) > 1:
+            from django.core.exceptions import MultipleObjectsReturned
+            raise MultipleObjectsReturned('Getting more than one object back')
+        else:
+            return result[0]
 
     @ClassProperty
     def query(cls):

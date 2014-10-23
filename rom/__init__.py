@@ -285,7 +285,9 @@ class _ModelMetaclass(type):
             cunique.add(key)
 
         dict['_pkey'] = pkey
-        dict['_gindex'] = GeneralIndex(name)
+
+        key_prefix = dict.get('KEY_PREFIX') or name.lower()   # use better prefixes
+        dict['_gindex'] = GeneralIndex(key_prefix)
 
         MODELS[name] = model = type.__new__(cls, name, bases, dict)
         return model

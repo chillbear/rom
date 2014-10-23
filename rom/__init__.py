@@ -591,6 +591,23 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._last = last
         self._modified = False
         self._deleted = False
+
+        # loops through and index all columns that should be indexed
+        indexed_key = '%s:indexed_columns' % self._key_prefix()
+        if conn.exists(indexed_key) is False:
+            for attr in cls._columns:
+                conn.sadd(indexed_key, attr)
+
+        for attr in conn.smembers(indexed_key):
+            if cls._columns[attr]._index:
+                index_key = '%s:indexed:%s' % (self._key_prefix(), attr)
+                val = getattr(self, attr)
+                if val:
+                    if isinstance(cls._columns[attr], Text):
+                        conn.zadd(index_key, 0, self.pk)
+                    else:
+                        conn.zadd(index_key, float(val), self.pk)
+
         return ret
 
     def delete(self, **kwargs):
@@ -814,12 +831,6 @@ if is_delete then
     redis.call('HDEL', namespace .. '::', id)
 end
 
--- add new key index data
-local nkeys = cjson.decode(ARGV[7])
-for i, key in ipairs(nkeys) do
-    redis.call('SADD', string.format('%s:%s:idx', namespace, key), id)
-end
-
 -- add new scored index data
 local nscored = {}
 for key, score in pairs(cjson.decode(ARGV[8])) do
@@ -845,12 +856,7 @@ for i, data in ipairs(cjson.decode(ARGV[10])) do
     nsuffix[#nsuffix + 1] = {data[1], data[2]}
 end
 
-if not is_delete then
-    -- update known index data
-    local encoded = cjson.encode({nkeys, nscored, nprefix, nsuffix})
-    redis.call('HSET', namespace .. '::', id, encoded)
-end
-return #nkeys + #nscored + #nprefix + #nsuffix
+return #nscored + #nprefix + #nsuffix
 ''')
 
 def redis_writer_lua(conn, namespace, id, unique, udelete, delete, data, keys,

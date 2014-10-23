@@ -133,7 +133,7 @@ import redis
 import six
 
 from .columns import (Column, Integer, Boolean, Float, Decimal, DateTime,
-    Date, Time, Text, Json, PrimaryKey, ManyToOne, ForeignModel, OneToMany,
+    Date, Time, Text, Json, Point, PrimaryKey, ManyToOne, ForeignModel, OneToMany,
     MODELS, _on_delete, SKIP_ON_DELETE)
 from .exceptions import (ORMError, UniqueKeyViolation, InvalidOperation,
     QueryError, ColumnError, MissingColumn, InvalidColumnValue, RestrictError)

@@ -1,4 +1,4 @@
-
+from django.contrib.gis.geos import Point
 from datetime import datetime, date, time as dtime
 from decimal import Decimal as _Decimal
 import json
@@ -10,6 +10,7 @@ from .exceptions import (ORMError, InvalidOperation, ColumnError,
     MissingColumn, InvalidColumnValue, RestrictError)
 from .util import (_numeric_keygen, _string_keygen, _many_to_one_keygen,
     _boolean_keygen, dt2ts, ts2dt, t2ts, ts2t, session, _connect)
+from django.contrib.gis.geos import Point as GeoPoint
 
 NULL = object()
 MODELS = {}
@@ -431,6 +432,28 @@ class Json(Column):
         if isinstance(value, self._allowed):
             return value
         return json.loads(value)
+
+
+class Point(Column):
+    """
+    Column to store point type.  This is necessary for PostGIS operations.
+    """
+    _allowed = Point
+
+    def _to_redis(self, value):
+        if value is None:
+            return json.dumps(value)
+
+        point_dict = {'x': value.x, 'y': value.y}
+        return json.dumps(point_dict)
+
+    def _from_redis(self, value):
+        if value == 'null':
+            return None
+        point_dict = json.loads(value)
+        point = GeoPoint(x=point_dict.get('x'), y=point_dict.get('y'))
+        return point
+
 
 class PrimaryKey(Column):
     '''

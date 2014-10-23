@@ -83,6 +83,7 @@ import threading
 import time
 import weakref
 
+import pytz
 import redis
 from redis.client import BasePipeline
 import six
@@ -233,6 +234,8 @@ _epoch = datetime(1970, 1, 1)
 _epochd = _epoch.date()
 def dt2ts(value):
     if isinstance(value, datetime):
+        if value.tzinfo:
+            value = value.astimezone(pytz.utc).replace(tzinfo=None)   # convert to utc
         delta = value - _epoch
     else:
         delta = value - _epochd

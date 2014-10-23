@@ -285,7 +285,9 @@ class _ModelMetaclass(type):
             cunique.add(key)
 
         dict['_pkey'] = pkey
-        dict['_gindex'] = GeneralIndex(name)
+
+        key_prefix = dict.get('KEY_PREFIX') or name.lower()   # use better prefixes
+        dict['_gindex'] = GeneralIndex(key_prefix)
 
         MODELS[name] = model = type.__new__(cls, name, bases, dict)
         return model
@@ -347,9 +349,12 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         This is the typical behavior of nulls in unique constraints inside both
         MySQL and Postgres.
     '''
+
+    KEY_PREFIX = None
+
     def __init__(self, **kwargs):
         self._new = not kwargs.pop('_loading', False)
-        model = self.__class__.__name__
+        model = self._key_prefix()
         self._data = {}
         self._last = {}
         self._modified = False
@@ -382,9 +387,13 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             data = dict((k.decode(), v.decode()) for k, v in data.items())
         self.__init__(_loading=True, **data)
 
+    @classmethod
+    def _key_prefix(cls):
+        return getattr(cls, 'KEY_PREFIX') or cls.__name__.lower()
+
     @property
     def _pk(self):
-        return '%s:%s'%(self.__class__.__name__, getattr(self, self._pkey))
+        return '%s:%s' % (self._key_prefix(), getattr(self, self._pkey))
 
     @classmethod
     def _apply_changes(cls, old, new, full=False, delete=False):
@@ -394,7 +403,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         if not pk:
             raise ColumnError("Missing primary key value")
 
-        model = cls.__name__
+        model = cls._key_prefix()
+
         key = '%s:%s'%(model, pk)
         pipe = conn.pipeline(True)
 
@@ -624,7 +634,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         single = not isinstance(ids, (list, tuple))
         if single:
             ids = [ids]
-        pks = ['%s:%s'%(cls.__name__, id) for id in map(int, ids)]
+        pks = ['%s:%s'%(cls._key_prefix(), id) for id in map(int, ids)]
         # get from the session, if possible
         out = list(map(session.get, pks))
         # if we couldn't get an instance from the session, load from Redis
@@ -670,7 +680,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             with columns that use a numeric index.
         '''
         conn = _connect(cls)
-        model = cls.__name__
+        model = cls._key_prefix()
         # handle limits and query requirements
         _limit = kwargs.pop('_limit', ())
         if _limit and len(_limit) != 2:

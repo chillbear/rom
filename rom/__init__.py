@@ -616,6 +616,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                             if val not in pk_list:
                                 pk_list.append(self.pk)
                                 conn.hset(mappings_key, val, json.dumps(pk_list))
+                        elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
+                            pass
                     else:
                         conn.zadd(index_key, self.pk, float(val))
         return ret

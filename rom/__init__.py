@@ -591,6 +591,35 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._last = last
         self._modified = False
         self._deleted = False
+
+        print self._key_prefix()
+        cls = self.__class__
+        conn = _connect(cls)
+
+        # loops through and index all columns that should be indexed
+        for attr in cls._columns:
+
+            if cls._columns[attr]._index:
+                index_key = '%s:indexed:%s' % (self._key_prefix(), attr)
+                val = getattr(self, attr)
+
+                if val is not None:
+                    if isinstance(cls._columns[attr], Text):
+                        conn.zadd(index_key, 0, self.pk)
+                        # Need to add val -> list of pks
+                        mappings_key = '%s:mappings' % index_key
+                        pk_list = conn.hget(mappings_key, val)
+                        if not pk_list:
+                            conn.hset(mappings_key, val, json.dumps([self.pk]))
+                        else:
+                            pk_list = json.loads(pk_list)
+                            if val not in pk_list:
+                                pk_list.append(self.pk)
+                                conn.hset(mappings_key, val, json.dumps(pk_list))
+                        elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
+                            pass
+                    else:
+                        conn.zadd(index_key, self.pk, float(val))
         return ret
 
     def delete(self, **kwargs):
@@ -659,80 +688,54 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         return out
 
     @classmethod
-    def get_by(cls, **kwargs):
-        '''
-        This method offers a simple query method for fetching entities of this
-        type via attribute numeric ranges (such columns must be ``indexed``),
-        or via ``unique`` columns.
+    def filter_by(cls, **kwargs):
+        """
+        filter_by
+        """
+        # Need to check for None case
+        if kwargs is None:
+            return None
 
-        Some examples::
-
-            user = User.get_by(email_address='user@domain.com')
-            # gets up to 25 users created in the last 24 hours
-            users = User.get_by(
-                created_at=(time.time()-86400, time.time()),
-                _limit=(0, 25))
-
-        If you would like to make queries against multiple columns or with
-        multiple criteria, look into the Model.query class property.
-
-        .. note: Ranged queries with `get_by(col=(start, end))` will only work
-            with columns that use a numeric index.
-        '''
         conn = _connect(cls)
-        model = cls._key_prefix()
-        # handle limits and query requirements
-        _limit = kwargs.pop('_limit', ())
-        if _limit and len(_limit) != 2:
-            raise QueryError("Limit must include both 'offset' and 'count' parameters")
-        elif _limit and not all(isinstance(x, six.integer_types) for x in _limit):
-            raise QueryError("Limit arguments must both be integers")
-        if len(kwargs) != 1:
-            raise QueryError("We can only fetch object(s) by exactly one attribute, you provided %s"%(len(kwargs),))
 
-        for attr, value in kwargs.items():
-            plain_attr = attr.partition(':')[0]
-            if isinstance(value, tuple) and len(value) != 2:
-                raise QueryError("Range queries must include exactly two endpoints")
+        result = None
+        for key, value in kwargs.iteritems():
+            if not cls._columns[key]._index:
+                raise Exception('Trying to get_by on a non-indexed column')
 
-            # handle unique index lookups
-            if attr in cls._unique:
-                if isinstance(value, tuple):
-                    raise QueryError("Cannot query a unique index with a range of values")
-                single = not isinstance(value, list)
-                if single:
-                    value = [value]
-                qvalues = list(map(cls._columns[attr]._to_redis, value))
-                ids = [x for x in conn.hmget('%s:%s:uidx'%(model, attr), qvalues) if x]
-                if not ids:
-                    return None if single else []
-                return cls.get(ids[0] if single else ids)
+            index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+            mapping_key = '%s:mappings' % index_key
+            if isinstance(cls._columns[key], Text):
+                mappings = conn.hget(mapping_key, value)
+                if mappings is None:
+                    pass
+                pk_list = json.loads(mappings)
+            else:
+                pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
 
-            if plain_attr not in cls._index:
-                raise QueryError("Cannot query on a column without an index")
+            if result is None:
+                result = set(pk_list)
+            else:
+                result = result.intersection(set(pk_list))
 
-            if isinstance(value, NUMERIC_TYPES) and not isinstance(value, bool):
-                value = (value, value)
+        inst_list = []
+        for pk in result:
+            inst_list.append(cls.get_by_pk(pk))
+        return inst_list
 
-            if isinstance(value, tuple):
-                # this is a numeric range query, we'll just pull it directly
-                args = list(value)
-                for i, a in enumerate(args):
-                    # Handle the ranges where None is -inf on the left and inf
-                    # on the right when used in the context of a range tuple.
-                    args[i] = ('-inf', 'inf')[i] if a is None else cls._columns[attr]._to_redis(a)
-                if _limit:
-                    args.extend(_limit)
-                ids = conn.zrangebyscore('%s:%s:idx'%(model, attr), *args)
-                if not ids:
-                    return []
-                return cls.get(ids)
-
-            # defer other index lookups to the query object
-            query = cls.query.filter(**{attr: value})
-            if _limit:
-                query = query.limit(*_limit)
-            return query.all()
+    @classmethod
+    def get_by(cls, **kwargs):
+        """
+        get_by - rewritten to only return one object.  The attribute MUST be indexed for this method
+        to work
+        """
+        result = cls.filter_by(**kwargs)
+        if result is None or len(result) == 0:
+            raise Exception('The object you are trying to get does not exist')
+        elif len(result) > 1:
+            raise Exception('Getting more than one object back')
+        else:
+            return result[0]
 
     @ClassProperty
     def query(cls):
@@ -815,10 +818,6 @@ if is_delete then
 end
 
 -- add new key index data
-local nkeys = cjson.decode(ARGV[7])
-for i, key in ipairs(nkeys) do
-    redis.call('SADD', string.format('%s:%s:idx', namespace, key), id)
-end
 
 -- add new scored index data
 local nscored = {}
@@ -845,12 +844,7 @@ for i, data in ipairs(cjson.decode(ARGV[10])) do
     nsuffix[#nsuffix + 1] = {data[1], data[2]}
 end
 
-if not is_delete then
-    -- update known index data
-    local encoded = cjson.encode({nkeys, nscored, nprefix, nsuffix})
-    redis.call('HSET', namespace .. '::', id, encoded)
-end
-return #nkeys + #nscored + #nprefix + #nsuffix
+return #nscored + #nprefix + #nsuffix
 ''')
 
 def redis_writer_lua(conn, namespace, id, unique, udelete, delete, data, keys,

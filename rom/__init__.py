@@ -731,11 +731,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         """
         result = cls.filter_by(**kwargs)
         if result is None or len(result) == 0:
-            from django.core.exceptions import ObjectDoesNotExist
-            raise ObjectDoesNotExist('The object you are trying to get does not exist')
+            raise Exception('The object you are trying to get does not exist')
         elif len(result) > 1:
-            from django.core.exceptions import MultipleObjectsReturned
-            raise MultipleObjectsReturned('Getting more than one object back')
+            raise Exception('Getting more than one object back')
         else:
             return result[0]
 

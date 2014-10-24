@@ -635,6 +635,29 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._modified = True
         self._deleted = True
 
+        # Go through and remove indexed columns from redis
+        cls = self.__class__
+        conn = _connect(cls)
+
+        for attr in cls._columns:
+            if cls._columns[attr]._index:
+                val = getattr(self, attr)
+                index_key = '%s:indexed:%s' % (self._key_prefix(), attr)
+                if val is not None:
+                    if isinstance(cls._columns[attr], Text):
+                        conn.zrem(index_key, self.pk)
+                        mappings_key = '%s:mappings' % index_key
+                        pk_list = conn.hget(mappings_key, val)
+                        if pk_list:
+                            pk_list = map(int, json.loads(pk_list))
+                            if self.pk in pk_list:
+                                pk_list.remove(self.pk)
+                                conn.hset(mappings_key, val, json.dumps(pk_list))
+                    elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
+                        pass
+                    else:
+                        conn.zrem(index_key, self.pk)
+
     def copy(self):
         '''
         Creates a shallow copy of the given entity (any entities that can be

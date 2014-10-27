@@ -592,7 +592,6 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._modified = False
         self._deleted = False
 
-        print self._key_prefix()
         cls = self.__class__
         conn = _connect(cls)
 

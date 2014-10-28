@@ -351,6 +351,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
     '''
 
     KEY_PREFIX = None
+    track_dirty_fields = False
 
     def __init__(self, **kwargs):
         self._new = not kwargs.pop('_loading', False)
@@ -360,6 +361,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._modified = False
         self._deleted = False
         self._init = False
+        self._modified_fields = set()
+
         for attr in self._columns:
             cval = kwargs.get(attr, None)
             data = (model, attr, cval, not self._new)
@@ -394,6 +397,10 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
     @property
     def _pk(self):
         return '%s:%s' % (self._key_prefix(), getattr(self, self._pkey))
+
+    @property
+    def _dirty_fields_key(self):
+        return '{}:dirty'.format(self._pk)
 
     @classmethod
     def _apply_changes(cls, old, new, full=False, delete=False):
@@ -580,6 +587,10 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         '''
         new = self.to_dict()
         ret = self._apply_changes(self._last, new, full or self._new)
+
+        if self.track_dirty_fields and not self._new:
+            self._update_dirty_fields()
+
         self._new = False
         # Now explicitly encode data for the _last attribute to make re-saving
         # work correctly in all cases.
@@ -590,6 +601,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         self._last = last
         self._modified = False
+        self._modified_fields.clear()
         self._deleted = False
 
         cls = self.__class__
@@ -631,6 +643,10 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         session.forget(self)
         self._apply_changes(self._last, {}, delete=True)
+
+        if self.track_dirty_fields:
+            self._update_dirty_fields(clear=True)
+
         self._modified = True
         self._deleted = True
 
@@ -656,6 +672,28 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                         pass
                     else:
                         conn.zrem(index_key, self.pk)
+
+    def get_dirty_fields(self):
+        conn = _connect(self)
+        key = self._dirty_fields_key
+
+        return conn.smembers(key)
+
+    def _update_dirty_fields(self, clear=False):
+        '''
+        Update a set that keeps track of the dirty fields (i.e. not persisted
+        to the primary database)
+        Key is something like "user:151:dirty"
+        Either add to the set, or clear it (if clear=True)
+        '''
+        conn = _connect(self)
+        key = self._dirty_fields_key
+
+        if clear:
+            conn.delete(key)
+        elif self._modified_fields:
+            modified_fields = list(self._modified_fields)
+            conn.sadd(key, *modified_fields)
 
     def copy(self):
         '''

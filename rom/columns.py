@@ -223,6 +223,10 @@ class Column(object):
         self._validate(value)
         obj._data[self._attr] = value
         obj._modified = True
+
+        if not obj._new:
+            obj._modified_fields.add(self._attr)
+
         session.add(obj)
 
     def __get__(self, obj, objtype):

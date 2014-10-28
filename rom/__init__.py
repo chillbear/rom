@@ -615,7 +615,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 val = getattr(self, attr)
 
                 if val is not None:
-                    if isinstance(cls._columns[attr], Text):
+                    if isinstance(cls._columns[attr], Text) or isinstance(cls._columns[attr], String):
                         conn.zadd(index_key, 0, self.pk)
                         # Need to add val -> list of pks
                         mappings_key = '%s:mappings' % index_key

@@ -628,7 +628,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                                 pk_list.append(self.pk)
                                 conn.hset(mappings_key, val, json.dumps(pk_list))
                     elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
-                        pass
+                        continue
+                    elif isinstance(cls._columns[attr], DateTime):
+                        conn.zadd(index_key, self.pk, dt2ts(val))
                     else:
                         conn.zadd(index_key, self.pk, float(val))
         return ret
@@ -778,8 +780,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     raise Exception('Trying to get_by on a non-indexed column')
 
                 index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+                str_value = str(value)
 
-                str_value = str(float(value))
                 if operation == 'lt':
                     # Less than operation
                     pk_str_list = conn.zrangebyscore(index_key, '-inf', '(' + str_value)
@@ -794,11 +796,10 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     pk_str_list = conn.zrangebyscore(index_key, str_value, '+inf')
 
                 if not pk_str_list:
-                    pass
+                    continue
 
                 pk_list = map(int, pk_str_list)
             else:
-
                 if not cls._columns[key]._index:
                     raise Exception('Trying to get_by on a non-indexed column')
 
@@ -807,8 +808,11 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 if isinstance(cls._columns[key], Text):
                     mappings = conn.hget(mapping_key, value)
                     if mappings is None:
-                        pass
+                        continue
                     pk_list = json.loads(mappings)
+                elif isinstance(cls._columns[key], ManyToOne):
+                    index_key = '%s:%s:idx' % (cls._key_prefix(), key)
+                    pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
                 else:
                     pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
 

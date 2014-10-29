@@ -552,6 +552,7 @@ class ManyToOne(Column):
         if value._new:
             # should spew a warning here
             value.save()
+
         v = str(getattr(value, value._pkey))
         return v
 

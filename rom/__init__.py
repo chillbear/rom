@@ -763,20 +763,46 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             if not cls._columns[key]._index:
                 raise Exception('Trying to get_by on a non-indexed column')
 
-            index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
-            mapping_key = '%s:mappings' % index_key
-            if isinstance(cls._columns[key], Text):
-                mappings = conn.hget(mapping_key, value)
-                if mappings is None:
-                    pass
-                pk_list = json.loads(mappings)
-            else:
-                pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
+            # Determine if we have a less than, greater than statement
+            args = key.split('__')
+            if len(args) == 2:
+                # Let's assume that you don't use operations for strings/texts
+                key = args[0]
+                operation = args[1]
+                str_value = str(float(value))
+                if operation == 'lt':
+                    # Less than operation
+                    pk_str_list = conn.zrangebyscore(index_key, '-inf', '(' + str_value)
+                elif operation == 'lte':
+                    # Less than or equal to operation
+                    pk_str_list = conn.zrangebyscore(index_key, '-inf', str_value)
+                elif operation == 'gt':
+                    # Greater than
+                    pk_str_list = conn.zrangebyscore(index_key, str_value, '+inf')
+                elif operation == 'gte':
+                    # Greater than or equal to
+                    pk_str_list = conn.zrangebyscore(index_key, '(' + str_value, '+inf')
 
-            if result is None:
-                result = set(pk_list)
-            else:
+                if not pk_str_list:
+                    pass
+
+                pk_list = map(int, pk_str_list)
                 result = result.intersection(set(pk_list))
+            else:
+                index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+                mapping_key = '%s:mappings' % index_key
+                if isinstance(cls._columns[key], Text):
+                    mappings = conn.hget(mapping_key, value)
+                    if mappings is None:
+                        pass
+                    pk_list = json.loads(mappings)
+                else:
+                    pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
+
+                if result is None:
+                    result = set(pk_list)
+                else:
+                    result = result.intersection(set(pk_list))
 
         inst_list = []
         for pk in result:

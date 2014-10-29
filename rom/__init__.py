@@ -748,27 +748,37 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         return out
 
     @classmethod
+    def all_instances(cls):
+        """
+        Need to support this later
+        """
+        return None
+
+    @classmethod
     def filter_by(cls, **kwargs):
         """
         filter_by
         """
         # Need to check for None case
-        if kwargs is None:
-            return None
+        if kwargs is None or len(kwargs) == 0:
+            return cls.all_instances()
 
         conn = _connect(cls)
 
         result = None
         for key, value in kwargs.iteritems():
-            if not cls._columns[key]._index:
-                raise Exception('Trying to get_by on a non-indexed column')
-
             # Determine if we have a less than, greater than statement
             args = key.split('__')
             if len(args) == 2:
                 # Let's assume that you don't use operations for strings/texts
                 key = args[0]
                 operation = args[1]
+
+                if not cls._columns[key]._index:
+                    raise Exception('Trying to get_by on a non-indexed column')
+
+                index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+
                 str_value = str(float(value))
                 if operation == 'lt':
                     # Less than operation
@@ -778,17 +788,20 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     pk_str_list = conn.zrangebyscore(index_key, '-inf', str_value)
                 elif operation == 'gt':
                     # Greater than
-                    pk_str_list = conn.zrangebyscore(index_key, str_value, '+inf')
+                    pk_str_list = conn.zrangebyscore(index_key, '(' + str_value, '+inf')
                 elif operation == 'gte':
                     # Greater than or equal to
-                    pk_str_list = conn.zrangebyscore(index_key, '(' + str_value, '+inf')
+                    pk_str_list = conn.zrangebyscore(index_key, str_value, '+inf')
 
                 if not pk_str_list:
                     pass
 
                 pk_list = map(int, pk_str_list)
-                result = result.intersection(set(pk_list))
             else:
+
+                if not cls._columns[key]._index:
+                    raise Exception('Trying to get_by on a non-indexed column')
+
                 index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
                 mapping_key = '%s:mappings' % index_key
                 if isinstance(cls._columns[key], Text):
@@ -799,14 +812,15 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 else:
                     pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
 
-                if result is None:
-                    result = set(pk_list)
-                else:
-                    result = result.intersection(set(pk_list))
+            if result is None:
+                result = set(pk_list)
+            else:
+                result = result.intersection(set(pk_list))
 
         inst_list = []
-        for pk in result:
-            inst_list.append(cls.get_by_pk(pk))
+        if result is not None:
+            for pk in result:
+                inst_list.append(cls.get_by_pk(pk))
         return inst_list
 
     @classmethod

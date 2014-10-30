@@ -11,6 +11,7 @@ from .exceptions import (ORMError, InvalidOperation, ColumnError,
 from .util import (_numeric_keygen, _string_keygen, _many_to_one_keygen,
     _boolean_keygen, dt2ts, ts2dt, t2ts, ts2t, session, _connect)
 from django.contrib.gis.geos import Point as GeoPoint
+from driver.routing.route import Route
 
 NULL = object()
 MODELS = {}
@@ -457,6 +458,13 @@ class Point(Column):
         point_dict = json.loads(value)
         point = GeoPoint(x=point_dict.get('x'), y=point_dict.get('y'))
         return point
+
+
+class RouteCol(Json):
+    """
+    Column to store route history
+    """
+    _allowed = (Route, list)
 
 
 class PrimaryKey(Column):

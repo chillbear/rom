@@ -615,7 +615,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 val = getattr(self, attr)
 
                 if val is not None:
-                    if isinstance(cls._columns[attr], Text):
+                    if isinstance(cls._columns[attr], Text) or isinstance(cls._columns[attr], String):
                         conn.zadd(index_key, 0, self.pk)
                         # Need to add val -> list of pks
                         mappings_key = '%s:mappings' % index_key
@@ -628,7 +628,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                                 pk_list.append(self.pk)
                                 conn.hset(mappings_key, val, json.dumps(pk_list))
                     elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
-                        pass
+                        continue
+                    elif isinstance(cls._columns[attr], DateTime):
+                        conn.zadd(index_key, self.pk, dt2ts(val))
                     else:
                         conn.zadd(index_key, self.pk, float(val))
         return ret
@@ -748,30 +750,71 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         return out
 
     @classmethod
+    def all_instances(cls):
+        """
+        Need to support this later
+        """
+        return None
+
+    @classmethod
     def filter_by(cls, **kwargs):
         """
         filter_by
         """
         # Need to check for None case
-        if kwargs is None:
-            return None
+        if kwargs is None or len(kwargs) == 0:
+            return cls.all_instances()
 
         conn = _connect(cls)
 
         result = None
         for key, value in kwargs.iteritems():
-            if not cls._columns[key]._index:
-                raise Exception('Trying to get_by on a non-indexed column')
+            # Determine if we have a less than, greater than statement
+            args = key.split('__')
+            if len(args) == 2:
+                # Let's assume that you don't use operations for strings/texts
+                key = args[0]
+                operation = args[1]
 
-            index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
-            mapping_key = '%s:mappings' % index_key
-            if isinstance(cls._columns[key], Text):
-                mappings = conn.hget(mapping_key, value)
-                if mappings is None:
-                    pass
-                pk_list = json.loads(mappings)
+                if not cls._columns[key]._index:
+                    raise Exception('Trying to get_by on a non-indexed column')
+
+                index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+                str_value = str(value)
+
+                if operation == 'lt':
+                    # Less than operation
+                    pk_str_list = conn.zrangebyscore(index_key, '-inf', '(' + str_value)
+                elif operation == 'lte':
+                    # Less than or equal to operation
+                    pk_str_list = conn.zrangebyscore(index_key, '-inf', str_value)
+                elif operation == 'gt':
+                    # Greater than
+                    pk_str_list = conn.zrangebyscore(index_key, '(' + str_value, '+inf')
+                elif operation == 'gte':
+                    # Greater than or equal to
+                    pk_str_list = conn.zrangebyscore(index_key, str_value, '+inf')
+
+                if not pk_str_list:
+                    continue
+
+                pk_list = map(int, pk_str_list)
             else:
-                pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
+                if not cls._columns[key]._index:
+                    raise Exception('Trying to get_by on a non-indexed column')
+
+                index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
+                mapping_key = '%s:mappings' % index_key
+                if isinstance(cls._columns[key], Text):
+                    mappings = conn.hget(mapping_key, value)
+                    if mappings is None:
+                        continue
+                    pk_list = json.loads(mappings)
+                elif isinstance(cls._columns[key], ManyToOne):
+                    index_key = '%s:%s:idx' % (cls._key_prefix(), key)
+                    pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
+                else:
+                    pk_list = map(int, conn.zrangebyscore(index_key, float(value), float(value)))
 
             if result is None:
                 result = set(pk_list)
@@ -779,8 +822,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 result = result.intersection(set(pk_list))
 
         inst_list = []
-        for pk in result:
-            inst_list.append(cls.get_by_pk(pk))
+        if result is not None:
+            for pk in result:
+                inst_list.append(cls.get_by_pk(pk))
         return inst_list
 
     @classmethod

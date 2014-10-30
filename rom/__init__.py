@@ -133,7 +133,7 @@ import redis
 import six
 
 from .columns import (Column, Integer, Boolean, Float, Decimal, DateTime,
-    Date, Time, Text, Json, Point, PrimaryKey, ManyToOne, ForeignModel, OneToMany,
+    Date, Time, Text, Json, Point, RouteCol, PrimaryKey, ManyToOne, ForeignModel, OneToMany,
     MODELS, _on_delete, SKIP_ON_DELETE)
 from .exceptions import (ORMError, UniqueKeyViolation, InvalidOperation,
     QueryError, ColumnError, MissingColumn, InvalidColumnValue, RestrictError)
@@ -629,7 +629,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                                 conn.hset(mappings_key, val, json.dumps(pk_list))
                     elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):
                         continue
-                    elif isinstance(cls._columns[attr], DateTime):
+                    elif isinstance(cls._columns[attr], DateTime) or isinstance(cls._columns[attr], Date):
                         conn.zadd(index_key, self.pk, dt2ts(val))
                     else:
                         conn.zadd(index_key, self.pk, float(val))
@@ -781,7 +781,6 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
                 index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
                 str_value = str(value)
-
                 if operation == 'lt':
                     # Less than operation
                     pk_str_list = conn.zrangebyscore(index_key, '-inf', '(' + str_value)

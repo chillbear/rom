@@ -242,7 +242,7 @@ def dt2ts(value):
     return delta.days * 86400 + delta.seconds + delta.microseconds / 1000000.
 
 def ts2dt(value):
-    return datetime.utcfromtimestamp(value)
+    return datetime.utcfromtimestamp(value).replace(tzinfo=pytz.UTC)
 
 def t2ts(value):
     return value.hour*3600 + value.minute * 60 + value.second + value.microsecond / 1000000.

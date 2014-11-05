@@ -780,7 +780,12 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     raise Exception('Trying to get_by on a non-indexed column')
 
                 index_key = '%s:indexed:%s' % (cls._key_prefix(), key)
-                str_value = str(value)
+
+                if isinstance(cls._columns[key], DateTime) or isinstance(cls._columns[key], Date):
+                    str_value = repr(dt2ts(value))
+                else:
+                    str_value = str(value)
+
                 if operation == 'lt':
                     # Less than operation
                     pk_str_list = conn.zrangebyscore(index_key, '-inf', '(' + str_value)

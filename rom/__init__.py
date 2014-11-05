@@ -140,6 +140,7 @@ from .exceptions import (ORMError, UniqueKeyViolation, InvalidOperation,
 from .index import GeneralIndex, Pattern, Prefix, Suffix
 from .util import (ClassProperty, _connect, session, dt2ts, t2ts,
     _prefix_score, _script_load, _encode_unique_constraint)
+from django.contrib.gis.geos import Point as GeoPoint
 
 VERSION = '0.29.0'
 
@@ -580,6 +581,21 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         '''
         return dict(self._data)
 
+    def to_json(self):
+        lite_dict = self._data
+        print lite_dict
+        for key, value in lite_dict.iteritems():
+            if value is not None:
+                if isinstance(self._columns[key], Point):
+                    point = getattr(self, key)
+                    lite_dict[key] = {'x': point.x, 'y': point.y}
+                elif isinstance(self._columns[key], Decimal):
+                    lite_dict[key] = str(value)
+                elif isinstance(self._columns[key], ManyToOne):
+                    lite_dict[key] = value.to_json()
+
+        return lite_dict
+
     def save(self, full=False):
         '''
         Saves the current entity to Redis. Will only save changed data by
@@ -633,6 +649,11 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                         conn.zadd(index_key, self.pk, dt2ts(val))
                     else:
                         conn.zadd(index_key, self.pk, float(val))
+
+        # Make sure we expire after TTL on lite_model
+        individual_key = '%s:%s' % (self._key_prefix(), self.pk)
+        conn.expire(individual_key, self.ttl)
+
         return ret
 
     def delete(self, **kwargs):
@@ -823,7 +844,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             if result is None:
                 result = set(pk_list)
             else:
-                result = result.intersection(set(pk_list))
+                # result = result.intersection(set(pk_list))
+                result = filter(result.__contains__, pk_list)
 
         inst_list = []
         if result is not None:
@@ -832,14 +854,20 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         return inst_list
 
     @classmethod
-    def get_by(cls, **kwargs):
+    def get_by(cls, retrieve=False, **kwargs):
         """
         get_by - rewritten to only return one object.  The attribute MUST be indexed for this method
         to work
         """
         result = cls.filter_by(**kwargs)
+
         if result is None or len(result) == 0:
-            raise Exception('The object you are trying to get does not exist')
+            if retrieve is True:
+                obj = cls.heavy_class.objects.get(**kwargs)
+                return cls.get_by_pk(obj.pk)
+            else:
+                raise Exception('The object you are trying to get does not exist')
+
         elif len(result) > 1:
             raise Exception('Getting more than one object back')
         else:

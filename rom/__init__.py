@@ -628,7 +628,11 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
             if cls._columns[attr]._index:
                 index_key = '%s:indexed:%s' % (self._key_prefix(), attr)
-                val = getattr(self, attr)
+                try:
+                    val = getattr(self, attr)
+                except:
+                    # Means that this column does not exist in heavy model
+                    val = None
 
                 if val is not None:
                     if isinstance(cls._columns[attr], Text) or isinstance(cls._columns[attr], String):
@@ -850,7 +854,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         inst_list = []
         if result is not None:
             for pk in result:
-                inst_list.append(cls.get_by_pk(pk))
+                inst_list.append(cls.get([pk], allow_create=True)[0])
         return inst_list
 
     @classmethod
@@ -860,11 +864,12 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         to work
         """
         result = cls.filter_by(**kwargs)
+        print 'result is: ', result
 
         if result is None or len(result) == 0:
             if retrieve is True:
                 obj = cls.heavy_class.objects.get(**kwargs)
-                return cls.get_by_pk(obj.pk)
+                return cls.get(obj.pk)
             else:
                 raise Exception('The object you are trying to get does not exist')
 

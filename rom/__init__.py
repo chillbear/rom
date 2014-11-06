@@ -709,6 +709,12 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         return conn.smembers(key)
 
+    def is_dirty(self):
+        conn = _connect(self)
+        key = self._dirty_fields_key
+
+        return conn.scard(key) > 0
+
     def _update_dirty_fields(self, clear=False):
         '''
         Update a set that keeps track of the dirty fields (i.e. not persisted

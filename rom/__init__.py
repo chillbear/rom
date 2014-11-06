@@ -746,6 +746,9 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         """
         Mark some dirty fields as not dirty..
         """
+        if not fields:
+            continue
+
         conn = _connect(self)
         key = self._dirty_fields_key
 

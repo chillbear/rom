@@ -742,6 +742,15 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 dirty_fields = list(dirty_fields)
                 conn.sadd(key, *dirty_fields)
 
+    def _unmark_dirty_fields(self, fields=None):
+        """
+        Mark some dirty fields as not dirty..
+        """
+        conn = _connect(self)
+        key = self._dirty_fields_key
+
+        conn.srem(key, *fields)
+
     def copy(self):
         '''
         Creates a shallow copy of the given entity (any entities that can be

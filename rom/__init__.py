@@ -353,6 +353,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
     KEY_PREFIX = None
     track_dirty_fields = False
+    db_fields = None
 
     def __init__(self, **kwargs):
         self._new = not kwargs.pop('_loading', False)
@@ -721,8 +722,17 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         if clear:
             conn.delete(key)
         elif self._modified_fields:
-            modified_fields = list(self._modified_fields)
-            conn.sadd(key, *modified_fields)
+            dirty_fields = self._modified_fields
+            if self.db_fields:
+                db_fields = self.db_fields
+                if not isinstance(db_fields, set):
+                    db_fields = set(db_fields)
+                # set intersection
+                dirty_fields = dirty_fields & db_fields
+
+            if dirty_fields:
+                dirty_fields = list(dirty_fields)
+                conn.sadd(key, *dirty_fields)
 
     def copy(self):
         '''

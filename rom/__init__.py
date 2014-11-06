@@ -721,14 +721,16 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         if clear:
             conn.delete(key)
-        elif self._modified_fields:
+        elif self._modified_fields and self.db_fields:
             dirty_fields = self._modified_fields
-            if self.db_fields:
-                db_fields = self.db_fields
-                if not isinstance(db_fields, set):
-                    db_fields = set(db_fields)
-                # set intersection
-                dirty_fields = dirty_fields & db_fields
+            db_fields = self.db_fields
+
+            # make sure it's a set
+            if not isinstance(db_fields, set):
+                db_fields = set(db_fields)
+
+            # set intersection
+            dirty_fields = dirty_fields & db_fields
 
             if dirty_fields:
                 dirty_fields = list(dirty_fields)

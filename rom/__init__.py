@@ -125,6 +125,7 @@ using features that require Lua scripting support.
 '''
 
 from collections import defaultdict
+import copy
 from datetime import datetime, date, time as dtime
 from decimal import Decimal as _Decimal
 import json
@@ -363,7 +364,6 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         self._modified = False
         self._deleted = False
         self._init = False
-        self._modified_fields = set()
 
         for attr in self._columns:
             cval = kwargs.get(attr, None)
@@ -376,7 +376,14 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     cval = self._columns[attr]._to_redis(cval)
                 self._last[attr] = cval
         self._init = True
+        self._reset_orig_data()
         session.add(self)
+
+    def _reset_orig_data(self):
+        """
+        Reset _orig_data back
+        """
+        self._orig_data = copy.deepcopy(self._data)
 
     def refresh(self, force=False):
         if self._deleted:
@@ -618,8 +625,8 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         self._last = last
         self._modified = False
-        self._modified_fields.clear()
         self._deleted = False
+        self._reset_orig_data()
 
         cls = self.__class__
         conn = _connect(cls)
@@ -715,6 +722,23 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         return conn.scard(key) > 0
 
+    def _get_modified_fields(self):
+        """
+        Get the fields that have changed on the model since loading it
+        Works by comparing values, so should work for mutable JSON fields too
+        Returns a dictionary of {field_name: last_value}
+        """
+        fields = {}
+        for key, val in self._data.iteritems():
+            if key in self._last and val != self._orig_data[key]:
+                fields[key] = val
+
+        return fields
+
+    @property
+    def _modified_field_names(self):
+        return set(self._get_modified_fields().keys())
+
     def _update_dirty_fields(self, clear=False):
         '''
         Update a set that keeps track of the dirty fields (i.e. not persisted
@@ -727,8 +751,11 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
         if clear:
             conn.delete(key)
-        elif self._modified_fields and self.db_fields:
-            dirty_fields = self._modified_fields
+        elif self.db_fields:
+            dirty_fields = self._modified_field_names
+            if not dirty_fields:
+                return
+
             db_fields = self.db_fields
 
             # make sure it's a set
@@ -753,6 +780,17 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         key = self._dirty_fields_key
 
         conn.srem(key, *fields)
+
+    def __eq__(self, other):
+        """
+        Custom equality by id (primary key)
+        """
+        if not isinstance(other, Model):
+            return False
+        return self.id == other.id
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def copy(self):
         '''
@@ -896,7 +934,6 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         to work
         """
         result = cls.filter_by(**kwargs)
-        print 'result is: ', result
 
         if result is None or len(result) == 0:
             if retrieve is True:

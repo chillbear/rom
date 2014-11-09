@@ -12,6 +12,7 @@ from .util import (_numeric_keygen, _string_keygen, _many_to_one_keygen,
     _boolean_keygen, dt2ts, ts2dt, t2ts, ts2t, session, _connect)
 from django.contrib.gis.geos import Point as GeoPoint
 from driver.routing.route import Route
+from rest_framework.utils.encoders import JSONEncoder
 
 NULL = object()
 MODELS = {}
@@ -428,8 +429,20 @@ class Json(Column):
             col = Json()
     '''
     _allowed = (dict, list, tuple)
+
+    def __init__(self, *args, **kwargs):
+        # use RestFramework's JSONEncoder, to handle datetime's
+        encoder_kwargs = {'cls': JSONEncoder}
+
+        extra_encoder_kwargs = kwargs.pop('encoder_kwargs', {})
+        encoder_kwargs.update(extra_encoder_kwargs)
+        self.encoder_kwargs = encoder_kwargs
+
+        super(Json, self).__init__(*args, **kwargs)
+
     def _to_redis(self, value):
-        return json.dumps(value)
+        return json.dumps(value, **self.encoder_kwargs)
+
     def _from_redis(self, value):
         if isinstance(value, self._allowed):
             return value

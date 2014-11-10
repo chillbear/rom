@@ -133,6 +133,7 @@ class Column(object):
     '''
     _allowed = ()
     _default_ = None
+    _allow_none = False
 
     __slots__ = '_required _default _init _unique _index _model _attr _keygen _prefix _suffix'.split()
 
@@ -173,10 +174,16 @@ class Column(object):
             self._keygen = keygen if keygen else _string_keygen
 
     def _from_redis(self, value):
+        if self._allow_none and value == '':
+            return None
+
         convert = self._allowed[0] if isinstance(self._allowed, (tuple, list)) else self._allowed
         return convert(value)
 
     def _to_redis(self, value):
+        if self._allow_none and value is None:
+            return ''
+
         return repr(value)
 
     def _validate(self, value):
@@ -217,12 +224,17 @@ class Column(object):
         if not obj._init:
             self._init_(obj, *value)
             return
-        try:
-            if not isinstance(value, self._allowed):
-                value = self._from_redis(value)
-        except (ValueError, TypeError):
-            raise InvalidColumnValue("Cannot convert %r into type %s"%(value, self._allowed))
-        self._validate(value)
+
+        if self._allow_none and value is None:
+            # if the Column allows setting value to None
+            pass
+        else:
+            try:
+                if not isinstance(value, self._allowed):
+                    value = self._from_redis(value)
+            except (ValueError, TypeError):
+                raise InvalidColumnValue("Cannot convert %r into type %s"%(value, self._allowed))
+            self._validate(value)
         obj._data[self._attr] = value
         obj._modified = True
 
@@ -331,6 +343,8 @@ class DateTime(Column):
     .. note:: tzinfo objects are not stored
     '''
     _allowed = datetime
+    _allow_none = True
+
     def _from_redis(self, value):
         return ts2dt(float(value))
     def _to_redis(self, value):
@@ -454,16 +468,17 @@ class Point(Column):
     Column to store point type.  This is necessary for PostGIS operations.
     """
     _allowed = Point
+    _allow_none = True
 
     def _to_redis(self, value):
         if value is None:
-            return json.dumps(value)
+            return ''
 
         point_dict = {'x': value.x, 'y': value.y}
         return json.dumps(point_dict)
 
     def _from_redis(self, value):
-        if value == 'null':
+        if value == '':
             return None
         point_dict = json.loads(value)
         point = GeoPoint(x=point_dict.get('x'), y=point_dict.get('y'))

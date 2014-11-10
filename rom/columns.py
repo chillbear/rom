@@ -173,17 +173,33 @@ class Column(object):
         elif prefix or suffix:
             self._keygen = keygen if keygen else _string_keygen
 
-    def _from_redis(self, value):
+    def from_redis(self, value):
+        """
+        Called to convert Python value into Redis
+        """
         if self._allow_none and value == '':
             return None
+        return self._from_redis(value)
 
+    def _from_redis(self, value):
+        """
+        Subclasses should override this
+        """
         convert = self._allowed[0] if isinstance(self._allowed, (tuple, list)) else self._allowed
         return convert(value)
 
-    def _to_redis(self, value):
+    def to_redis(self, value):
+        """
+        Called to convert Redis value into Python
+        """
         if self._allow_none and value is None:
             return ''
+        return self._to_redis(value)
 
+    def _to_redis(self, value):
+        """
+        Subclasses should override this
+        """
         return repr(value)
 
     def _validate(self, value):
@@ -471,15 +487,10 @@ class Point(Column):
     _allow_none = True
 
     def _to_redis(self, value):
-        if value is None:
-            return ''
-
         point_dict = {'x': value.x, 'y': value.y}
         return json.dumps(point_dict)
 
     def _from_redis(self, value):
-        if value == '':
-            return None
         point_dict = json.loads(value)
         point = GeoPoint(x=point_dict.get('x'), y=point_dict.get('y'))
         return point

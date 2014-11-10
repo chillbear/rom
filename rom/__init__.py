@@ -373,7 +373,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
             setattr(self, attr, data)
             if cval != None:
                 if not isinstance(cval, six.string_types):
-                    cval = self._columns[attr]._to_redis(cval)
+                    cval = self._columns[attr].to_redis(cval)
                 self._last[attr] = cval
         self._init = True
         self._reset_orig_data()
@@ -449,10 +449,10 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 for col in cls._unique:
                     ouval = old.get(col)
                     nuval = new.get(col)
-                    nuvale = columns[col]._to_redis(nuval) if nuval is not None else None
+                    nuvale = columns[col].to_redis(nuval) if nuval is not None else None
 
                     if six.PY2 and not isinstance(ouval, str):
-                        ouval = columns[col]._to_redis(ouval)
+                        ouval = columns[col].to_redis(ouval)
                     if not (nuval and (ouval != nuvale or full)):
                         # no changes to unique columns
                         continue
@@ -478,7 +478,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 oval = ca._from_redis(roval) if roval is not None else None
 
                 nval = new.get(attr)
-                rnval = ca._to_redis(nval) if nval is not None else None
+                rnval = ca.to_redis(nval) if nval is not None else None
 
                 # Add/update standard index
                 if ca._keygen and not delete and nval is not None and (ca._index or ca._prefix or ca._suffix):
@@ -536,7 +536,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                 # Add/update unique index
                 if ikey:
                     if six.PY2 and not isinstance(roval, str):
-                        roval = columns[attr]._to_redis(roval)
+                        roval = columns[attr].to_redis(roval)
                     if use_lua:
                         if oval is not None and roval != rnval:
                             udeleted[attr] = oval
@@ -552,7 +552,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
                 odata = [old.get(c) for c in uniq]
                 ndata = [new.get(c) for c in uniq]
-                ndata = [columns[c]._to_redis(nv) if nv is not None else None for c, nv in zip(uniq, ndata)]
+                ndata = [columns[c].to_redis(nv) if nv is not None else None for c, nv in zip(uniq, ndata)]
 
                 if odata != ndata and None not in odata:
                     udeleted[attr] = _encode_unique_constraint(odata)
@@ -621,7 +621,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         last = {}
         cols = self._columns
         for attr, data in new.items():
-            last[attr] = cols[attr]._to_redis(data) if data is not None else None
+            last[attr] = cols[attr].to_redis(data) if data is not None else None
 
         self._last = last
         self._modified = False

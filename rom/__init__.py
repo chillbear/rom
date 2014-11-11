@@ -644,7 +644,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
 
                 if val is not None:
                     if isinstance(cls._columns[attr], Text) or isinstance(cls._columns[attr], String):
-                        conn.zadd(index_key, 0, self.pk)
+                        conn.zadd(index_key, self.pk, 0)
                         # Need to add val -> list of pks
                         mappings_key = '%s:mappings' % index_key
                         pk_list = conn.hget(mappings_key, val)
@@ -652,7 +652,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                             conn.hset(mappings_key, val, json.dumps([self.pk]))
                         else:
                             pk_list = json.loads(pk_list)
-                            if val not in pk_list:
+                            if self.pk not in pk_list:
                                 pk_list.append(self.pk)
                                 conn.hset(mappings_key, val, json.dumps(pk_list))
                     elif isinstance(cls._columns[attr], ForeignModel) or isinstance(cls._columns[attr], ManyToOne):

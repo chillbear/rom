@@ -662,12 +662,6 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
                     else:
                         conn.zadd(index_key, self.pk, float(val))
 
-        # Make sure we expire after TTL on lite_model
-        ttl = getattr(self, 'ttl', None)
-        if ttl:
-            individual_key = '%s:%s' % (self._key_prefix(), self.pk)
-            conn.expire(individual_key, self.ttl)
-
         return ret
 
     def delete(self, **kwargs):

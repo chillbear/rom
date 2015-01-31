@@ -11,7 +11,7 @@ from .exceptions import (ORMError, InvalidOperation, ColumnError,
 from .util import (_numeric_keygen, _string_keygen, _many_to_one_keygen,
     _boolean_keygen, dt2ts, ts2dt, t2ts, ts2t, session, _connect)
 from django.contrib.gis.geos import Point as GeoPoint
-from driver.routing.route import Route
+from doordash.driver.routing.route import Route
 from rest_framework.utils.encoders import JSONEncoder
 
 NULL = object()

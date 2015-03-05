@@ -724,7 +724,7 @@ class Model(six.with_metaclass(_ModelMetaclass, object)):
         """
         fields = {}
         for key, val in self._data.iteritems():
-            if key in self._last and val != self._orig_data[key]:
+            if val != self._orig_data[key]:
                 fields[key] = val
 
         return fields
